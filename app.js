@@ -983,7 +983,7 @@ function render() {
     const pfs = [...new Set(S.funds.map(f => f.portfolio))];
     const cur = PF();
 
-    $('#pf').innerHTML = '<option value="">All portfolios</option>' +
+    $('#pf').innerHTML = '<option value="">All Portfolios</option>' +
         m(pfs, p => `<option${p === cur ? ' selected' : ''}>${p}</option>`);
 
     $('#tabs').innerHTML = m(
