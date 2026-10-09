@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>MF Portfolio Manager</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <header>
+        <h1>📈 MF Portfolio Manager</h1>
+        <nav id="tabs"></nav>
+        <div class="actions">
+            <select id="pf"></select>
+            <button id="bNav">↻ Refresh NAV</button>
+            <button id="bRun">▶ Run due SIP/SWP</button>
+            <label class="btn">Load workbook<input type="file" id="wb" accept=".xlsx,.xls" hidden></label>
+            <button id="bExp">⬇ Export workbook</button>
+        </div>
+    </header>
+    <main id="view"></main>
+    <div id="toast"></div>
+
+    <!-- Supabase JavaScript client must load before app.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

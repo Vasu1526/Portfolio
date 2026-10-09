@@ -1,0 +1,18 @@
+:root{--bg:#f6f7fb;--c:#fff;--t:#1c2333;--m:#6b7385;--b:#e3e6ee;--a:#2f5bea;--g:#0f9d58;--r:#d93025}
+@media(prefers-color-scheme:dark){:root{--bg:#10131a;--c:#181c26;--t:#e6e9f2;--m:#8a93a8;--b:#262b38;--a:#6d8cff;--g:#3ddc84;--r:#ff6b60}}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--c);border-bottom:1px solid var(--b);padding:12px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+h1{font-size:18px;margin:0}nav{display:flex;gap:4px;flex:1}nav a{padding:6px 12px;border-radius:8px;color:var(--m);text-decoration:none}
+nav a.on{background:var(--a);color:#fff}.actions{display:flex;gap:8px;flex-wrap:wrap}
+button,.btn,select,input{font:inherit;padding:7px 10px;border:1px solid var(--b);border-radius:8px;background:var(--c);color:var(--t)}
+button,.btn{cursor:pointer}button:hover,.btn:hover{border-color:var(--a)}button.p{background:var(--a);color:#fff;border-color:var(--a)}
+main{padding:20px;max-width:1300px;margin:auto}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px}
+.card{background:var(--c);border:1px solid var(--b);border-radius:12px;padding:14px}.card small{color:var(--m);display:block}.card b{font-size:20px}
+.tw{overflow-x:auto;background:var(--c);border:1px solid var(--b);border-radius:12px;margin-bottom:16px}
+table{border-collapse:collapse;width:100%}th,td{padding:8px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--b)}
+th{color:var(--m);font-weight:600;font-size:12px;position:sticky;top:0;background:var(--c)}th:nth-child(-n+2),td:nth-child(-n+2){text-align:left}
+td small{display:block;color:var(--m)}.pos{color:var(--g)}.neg{color:var(--r)}.muted{color:var(--m)}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.row select{max-width:360px}h3{margin:18px 0 8px}
+.empty{text-align:center;padding:60px 0;color:var(--m)}.err{color:var(--r)}
+#toast{position:fixed;bottom:20px;left:50%;transform:translate(-50%,80px);background:var(--t);color:var(--bg);padding:10px 18px;border-radius:10px;transition:.3s;opacity:0}
+#toast.show{transform:translate(-50%,0);opacity:1}
