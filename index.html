@@ -9,11 +9,38 @@
 </head>
 
 <body>
+    <!-- Mobile drawer overlay -->
+    <div id="drawer-overlay" onclick="closeDrawer()"></div>
+
+    <!-- Mobile slide-out drawer -->
+    <aside id="drawer">
+        <div id="drawer-header">
+            <span>📈 MF Portfolio</span>
+            <button id="drawer-close" onclick="closeDrawer()" aria-label="Close menu">✕</button>
+        </div>
+        <nav id="drawer-tabs"></nav>
+        <div id="drawer-actions">
+            <button id="bNav-drawer">↻ Refresh NAV</button>
+            <button id="bRun-drawer">▶ Run due SIP/SWP</button>
+            <label class="btn" id="wb-label-drawer">Load workbook<input type="file" id="wb-drawer" accept=".xlsx,.xls" hidden></label>
+            <button id="bExp-drawer">⬇ Export workbook</button>
+        </div>
+    </aside>
+
     <header>
-        <h1>📈 MF Portfolio Manager</h1>
+        <div id="header-top">
+            <!-- Hamburger button - only shown on mobile -->
+            <button id="hamburger" onclick="openDrawer()" aria-label="Open menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <h1>📈 MF Portfolio Manager</h1>
+        </div>
+        <!-- Portfolio selector: visible on both desktop and mobile -->
+        <select id="pf" id="pf-header"></select>
         <nav id="tabs"></nav>
         <div class="actions">
-            <select id="pf"></select>
             <button id="bNav">↻ Refresh NAV</button>
             <button id="bRun">▶ Run due SIP/SWP</button>
             <label class="btn">Load workbook<input type="file" id="wb" accept=".xlsx,.xls" hidden></label>
@@ -27,6 +54,39 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="app.js"></script>
+    <script>
+        function openDrawer() {
+            document.getElementById('drawer').classList.add('open');
+            document.getElementById('drawer-overlay').classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeDrawer() {
+            document.getElementById('drawer').classList.remove('open');
+            document.getElementById('drawer-overlay').classList.remove('show');
+            document.body.style.overflow = '';
+        }
+        // Sync drawer nav tabs with main tabs
+        function syncDrawer() {
+            const tabsMain = document.getElementById('tabs');
+            const tabsDrawer = document.getElementById('drawer-tabs');
+            if (tabsMain && tabsDrawer) {
+                tabsDrawer.innerHTML = tabsMain.innerHTML;
+                // Close drawer when a nav link is tapped
+                tabsDrawer.querySelectorAll('a').forEach(a => {
+                    a.addEventListener('click', closeDrawer);
+                });
+            }
+        }
+        // Wire up drawer buttons
+        document.getElementById('bNav-drawer').onclick = () => { closeDrawer(); document.getElementById('bNav').click(); };
+        document.getElementById('bRun-drawer').onclick = () => { closeDrawer(); document.getElementById('bRun').click(); };
+        document.getElementById('bExp-drawer').onclick = () => { closeDrawer(); document.getElementById('bExp').click(); };
+        document.getElementById('wb-drawer').onchange = e => { if (e.target.files[0]) document.getElementById('wb').dispatchEvent(Object.assign(new Event('change'), { target: e.target })); };
+
+        // Observe the main render to keep drawer tabs in sync
+        const renderObserver = new MutationObserver(syncDrawer);
+        renderObserver.observe(document.getElementById('tabs'), { childList: true, subtree: true });
+    </script>
 </body>
 
 </html>
