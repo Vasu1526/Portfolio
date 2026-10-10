@@ -381,11 +381,17 @@ h3 {
         text-align: left;
     }
 
-    /* Portfolio selector: full-width below logo */
-    header > #pf {
+    /* Portfolio & distributor selectors: full-width below logo */
+    header > #pf,
+    header > #dist {
         display: block;
         width: 100%;
         max-width: 100%;
+    }
+
+    #pf-drawer,
+    #dist-drawer {
+        width: 100%;
     }
 
     main {

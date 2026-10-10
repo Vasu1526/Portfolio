@@ -25,6 +25,7 @@ const sum = (a, k) => a.reduce((s, x) => s + x[k], 0);
 const iso = d => d.toISOString().slice(0, 10);
 const fs = v => String(v ?? '').replace(/\.0$/, '').trim();
 const PF = () => $('#pf').value;
+const DIST = () => $('#dist') ? $('#dist').value : '';
 const today = () => iso(new Date(Date.now() - new Date().getTimezoneOffset() * 6e4));
 
 const tbl = (h, r) => `<div class="tw"><table><thead><tr>${m(h, x => `<th>${x}</th>`)}</tr></thead><tbody>${m(r, x => `<tr>${m(x, c => `<td>${c}</td>`)}</tr>`)}</tbody></table></div>`;
@@ -167,6 +168,7 @@ function hold() {
     return Object.values(mp)
         .filter(h =>
             (!PF() || h.portfolio === PF()) &&
+            (!DIST() || h.distributor === DIST()) &&
             (h.units > 1e-4 || Math.abs(h.inv) > 1)
         )
         .map(h => {
@@ -981,10 +983,15 @@ const V = {
 
 function render() {
     const pfs = [...new Set(S.funds.map(f => f.portfolio))];
+    const dists = [...new Set(S.funds.map(f => f.distributor).filter(Boolean))];
     const cur = PF();
+    const curDist = DIST();
 
     $('#pf').innerHTML = '<option value="">All Portfolios</option>' +
         m(pfs, p => `<option${p === cur ? ' selected' : ''}>${p}</option>`);
+
+    $('#dist').innerHTML = '<option value="">Dist</option>' +
+        m(dists, d => `<option${d === curDist ? ' selected' : ''}>${d}</option>`);
 
     $('#tabs').innerHTML = m(
         TABS,
@@ -1003,6 +1010,7 @@ function render() {
 }
 
 $('#pf').onchange = render;
+$('#dist').onchange = render;
 $('#bNav').onclick = refreshNav;
 $('#bRun').onclick = () => runDue(true);
 $('#bExp').onclick = exportWb;
