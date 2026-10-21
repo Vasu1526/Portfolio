@@ -7,10 +7,11 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 let remoteReady = false, syncTimer = null, syncing = false, syncAgain = false;
 const K = 'mfpm.v1', TYPES = ['Lumpsum', 'SIP', 'SWP', 'Redemption', 'Switch-In', 'Switch-Out'], OUT = ['SWP', 'Redemption', 'Switch-Out'];
-const TABS = [['dash', 'Dashboard'], ['hold', 'Holdings'], ['tx', 'Transactions'], ['sip', 'SIP / SWP'], ['nav', 'NAV'], ['imp', 'Import']];
+const TABS = [['dash', 'Dashboard'], ['hold', 'Holdings'], ['tx', 'Transactions'], ['sip', 'SIP / SWP'], ['nav', 'NAV'], ['fund', 'Funds'], ['imp', 'Import']];
 let S = JSON.parse(localStorage.getItem(K) || 'null') || { funds: [], txns: [], sips: [], navs: {}, ran: {} }, tab = 'dash', pend = [], seq = 0, autoSeq = 0;
 
 const $ = s => document.querySelector(s), m = (a, f) => a.map(f).join('');
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 function save() {
     localStorage.setItem(K, JSON.stringify(S));
@@ -169,6 +170,9 @@ async function verifyTxNavs() {
 const pfOf = (fo, c) =>
     (S.funds.find(f => f.folio === fo && f.code === c) ||
         S.funds.find(f => f.folio === fo) || {}).portfolio || '—';
+
+const fundNameOf = (fo, c, fallback = '') =>
+    (S.funds.find(f => f.folio === fo && f.code === c) || {}).name || fallback || '';
 
 function xirr(keys, val) {
     const cf = S.txns
@@ -543,6 +547,31 @@ function saveSip(i) {
     toast('Schedule updated');
 }
 
+let editFundIdx = null;
+
+function editFund(i) {
+    editFundIdx = editFundIdx === i ? null : i;
+    render();
+}
+
+function saveFund(i) {
+    const f = S.funds[i];
+    if (!f) return;
+
+    f.portfolio = fs(document.getElementById('efund_portfolio_' + i).value);
+    f.name = document.getElementById('efund_name_' + i).value.trim();
+    f.amc = document.getElementById('efund_amc_' + i).value.trim();
+    f.distributor = document.getElementById('efund_distributor_' + i).value.trim();
+    f.plan = document.getElementById('efund_plan_' + i).value.trim();
+    f.option = document.getElementById('efund_option_' + i).value.trim();
+    f.category = document.getElementById('efund_category_' + i).value.trim();
+
+    editFundIdx = null;
+    save();
+    render();
+    toast('Fund updated');
+}
+
 
 /* ---------- EXCEL: WORKBOOK LOAD AND IMPORT ---------- */
 
@@ -856,7 +885,7 @@ function exportWb() {
             'Transaction ID': t.id,
             Date: t.date,
             'Scheme Code': t.code,
-            'Scheme Name': t.name,
+            'Scheme Name': fundNameOf(t.folio, t.code, t.name),
             AMC: t.amc,
             Type: t.type,
             Amount: Math.abs(t.amount),
@@ -933,7 +962,7 @@ function setSort(k) {
 
 const fopts = () => m(
     S.funds,
-    (f, i) => `<option value="${i}">${f.portfolio} · ${f.name} · ${f.folio}</option>`
+    (f, i) => `<option value="${i}">${esc(f.portfolio)} · ${esc(f.name)} · ${esc(f.folio)}</option>`
 );
 
 const V = {
@@ -965,7 +994,7 @@ const V = {
                 pfs.map(p => {
                     const a = agg(H.filter(h => h.portfolio === p));
                     return [
-                        p,
+                        esc(p),
                         inr(a.inv),
                         inr(a.val),
                         span(a.gain, inr(a.gain)),
@@ -981,8 +1010,8 @@ const V = {
         return tbl(
             ['Portfolio', 'Scheme', 'Units', 'Avg NAV', 'NAV', '1D %', 'Invested', 'Value', 'P/L', 'Return', 'XIRR'],
             hold().sort((a, b) => b.val - a.val).map(h => [
-                h.portfolio,
-                `${h.name}<small>${h.folio}</small>`,
+                esc(h.portfolio),
+                `${esc(fundNameOf(h.folio, h.code, h.name))}<small>${esc(h.folio)}</small>`,
                 n4(h.units),
                 h.units > 0 ? (h.inv / h.units).toFixed(2) : '—',
                 h.nav.toFixed(4),
@@ -1002,7 +1031,7 @@ const V = {
 
         r = r.filter(t => {
             if (txFlt.date && !fv(t.date).includes(fv(txFlt.date))) return false;
-            if (txFlt.name && !fv(t.name).includes(fv(txFlt.name))) return false;
+            if (txFlt.name && !fv(fundNameOf(t.folio, t.code, t.name)).includes(fv(txFlt.name))) return false;
             if (txFlt.type && t.type !== txFlt.type) return false;
             if (txFlt.folio && !fv(t.folio).includes(fv(txFlt.folio))) return false;
             if (txFlt.portfolio && pfOf(t.folio, t.code) !== txFlt.portfolio) return false;
@@ -1040,7 +1069,7 @@ const V = {
             ['nav', 'NAV', ''],
             ['units', 'Units', ''],
             ['folio', 'Folio', `<input id="flt_folio" style="${is}" placeholder="Folio" value="${txFlt.folio || ''}" oninput="updFlt('folio', this.value)" ${stop}>`],
-            ['portfolio', 'Portfolio', `<select id="flt_portfolio" style="${is}" onchange="updFlt('portfolio', this.value)" ${stop}><option value="">All</option>${m([...new Set(S.funds.map(f => f.portfolio).filter(Boolean))], p => `<option ${txFlt.portfolio === p ? 'selected' : ''}>${p}</option>`)}</select>`],
+            ['portfolio', 'Portfolio', `<select id="flt_portfolio" style="${is}" onchange="updFlt('portfolio', this.value)" ${stop}><option value="">All</option>${m([...new Set(S.funds.map(f => f.portfolio).filter(Boolean))], p => `<option${txFlt.portfolio === p ? ' selected' : ''}>${esc(p)}</option>`)}</select>`],
             ['id', 'ID', '']
         ];
 
@@ -1051,7 +1080,7 @@ const V = {
                 const navCell = mm
                     ? `<span class="nav-ok">${t.nav}</span> <span class="nav-badge" title="Was ${mm.stored.toFixed(4)} → corrected to ${mm.correct.toFixed(4)}">⚠️ fixed</span>`
                     : String(t.nav);
-                const dataRow = `<tr><td>${t.date}</td><td>${t.name}</td><td>${t.type}</td><td>${span(t.amount, inr(t.amount))}</td><td>${navCell}</td><td>${n4(t.units)}</td><td>${t.folio}</td><td>${pfOf(t.folio, t.code)}</td><td>${t.id}</td><td style="white-space:nowrap"><button onclick="editTx('${t.id}')" title="Edit" style="margin-right:4px">✏️</button><button onclick="delTx('${t.id}')" title="Delete">✕</button></td></tr>`;
+                const dataRow = `<tr><td>${t.date}</td><td>${esc(fundNameOf(t.folio, t.code, t.name))}</td><td>${t.type}</td><td>${span(t.amount, inr(t.amount))}</td><td>${navCell}</td><td>${n4(t.units)}</td><td>${esc(t.folio)}</td><td>${esc(pfOf(t.folio, t.code))}</td><td>${esc(t.id)}</td><td style="white-space:nowrap"><button onclick="editTx('${t.id}')" title="Edit" style="margin-right:4px">✏️</button><button onclick="delTx('${t.id}')" title="Delete">✕</button></td></tr>`;
                 const editRow = isEditing ? `<tr class="edit-row"><td colspan="10"><div class="edit-inline"><label>Date<input type="date" id="etx_date_${t.id}" value="${t.date}" onchange="txDateChanged('${t.id}')"></label><label>Type<select id="etx_type_${t.id}">${m(TYPES, tp => `<option${tp === t.type ? ' selected' : ''}>${tp}</option>`)}</select></label><label>Amount ₹<input type="number" id="etx_amt_${t.id}" step="0.01" value="${Math.abs(t.amount)}"></label><label>NAV<input type="number" id="etx_nav_${t.id}" step="0.0001" value="${t.nav}" placeholder="NAV"></label><button class="p" onclick="saveTx('${t.id}')">💾 Save</button><button onclick="editTx('${t.id}')">Cancel</button></div></td></tr>` : '';
                 return dataRow + editRow;
             }).join('') +
@@ -1078,12 +1107,12 @@ const V = {
             const isEditing = editSipIdx === i;
             const dataRow = [
                 `<input type="checkbox" ${s.active ? 'checked' : ''} onchange="togSip(${i})">`,
-                s.name,
+                esc(fundNameOf(s.folio, s.code, s.name)),
                 s.type,
                 s.day,
                 span(s.type === 'SWP' ? -1 : 1, inr(s.amount)),
-                s.folio,
-                pfOf(s.folio, s.code),
+                esc(s.folio),
+                esc(pfOf(s.folio, s.code)),
                 `<button onclick="editSip(${i})" title="Edit" style="margin-right:4px">✏️</button><button onclick="delSip(${i})" title="Delete">✕</button>`
             ];
             const editRow = isEditing ? `<tr class="edit-row"><td colspan="8"><div class="edit-inline">
@@ -1126,6 +1155,29 @@ const V = {
         );
     },
 
+    fund() {
+        const funds = S.funds
+            .map((f, i) => ({ f, i }))
+            .filter(({ f }) => (!PF() || f.portfolio === PF()) && (!DIST() || f.distributor === DIST()));
+        const rows = funds.map(({ f, i }) => {
+            const dataRow = `<tr><td>${esc(f.portfolio)}</td><td>${f.code}</td><td>${esc(f.name)}</td><td>${esc(f.folio)}</td><td>${esc(f.amc)}</td><td>${esc(f.distributor)}</td><td>${esc(f.plan)}</td><td>${esc(f.option)}</td><td>${esc(f.category)}</td><td><button onclick="editFund(${i})" title="Edit fund">✏️ Edit</button></td></tr>`;
+            const editRow = editFundIdx === i ? `<tr class="edit-row"><td colspan="10"><div class="edit-inline">
+  <label>Portfolio ID<input id="efund_portfolio_${i}" value="${esc(f.portfolio)}"></label>
+  <label>Scheme name<input id="efund_name_${i}" value="${esc(f.name)}"></label>
+  <label>AMC<input id="efund_amc_${i}" value="${esc(f.amc)}"></label>
+  <label>Distributor<input id="efund_distributor_${i}" value="${esc(f.distributor)}"></label>
+  <label>Plan<input id="efund_plan_${i}" value="${esc(f.plan)}"></label>
+  <label>Option<input id="efund_option_${i}" value="${esc(f.option)}"></label>
+  <label>Category<input id="efund_category_${i}" value="${esc(f.category)}"></label>
+  <button class="p" onclick="saveFund(${i})">Save</button>
+  <button onclick="editFund(${i})">Cancel</button>
+</div></td></tr>` : '';
+            return dataRow + editRow;
+        });
+
+        return `<h3>Fund directory</h3><div class="tw"><table><thead><tr>${m(['Portfolio ID', 'Scheme code', 'Scheme name', 'Folio', 'AMC', 'Distributor', 'Plan', 'Option', 'Category', ''], h => `<th>${h}</th>`)}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+    },
+
     imp() {
         const ok = pend.filter(o => !o.err).length;
 
@@ -1151,10 +1203,10 @@ function render() {
     const curDist = DIST();
 
     $('#pf').innerHTML = '<option value="">All Portfolios</option>' +
-        m(pfs, p => `<option${p === cur ? ' selected' : ''}>${p}</option>`);
+        m(pfs, p => `<option${p === cur ? ' selected' : ''}>${esc(p)}</option>`);
 
     $('#dist').innerHTML = '<option value="">Dist</option>' +
-        m(dists, d => `<option${d === curDist ? ' selected' : ''}>${d}</option>`);
+        m(dists, d => `<option${d === curDist ? ' selected' : ''}>${esc(d)}</option>`);
 
     $('#tabs').innerHTML = m(
         TABS,

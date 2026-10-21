@@ -150,7 +150,7 @@ table {
 th,
 td {
     padding: 8px 10px;
-    text-align: right;
+    text-align: left;
     white-space: nowrap;
     border-bottom: 1px solid var(--b)
 }
@@ -162,11 +162,6 @@ th {
     position: sticky;
     top: 0;
     background: var(--c)
-}
-
-th:nth-child(-n+2),
-td:nth-child(-n+2) {
-    text-align: left
 }
 
 td small {
