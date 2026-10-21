@@ -424,3 +424,72 @@ h3 {
         max-width: 100% !important;
     }
 }
+
+/* ---- Inline edit rows (Transactions & SIP/SWP) ---- */
+tr.edit-row > td {
+    background: var(--bg);
+    padding: 10px 12px;
+    border-top: 2px solid var(--a);
+}
+
+.edit-inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.edit-inline label {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: var(--m);
+    gap: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.edit-inline input,
+.edit-inline select {
+    font-size: 13px;
+    padding: 5px 8px;
+    border: 1px solid var(--b);
+    border-radius: 6px;
+    background: var(--c);
+    color: var(--t);
+    min-width: 110px;
+}
+
+.edit-inline button {
+    align-self: flex-end;
+    padding: 6px 14px;
+    font-size: 13px;
+}
+
+/* ---- NAV mismatch badge ---- */
+.nav-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    color: #7a4f00;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    padding: 1px 5px;
+    cursor: help;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+@media(prefers-color-scheme:dark) {
+    .nav-badge {
+        color: #ffd86e;
+        background: #3a2e00;
+        border-color: #ffc107;
+    }
+}
+
+.nav-ok {
+    font-weight: 600;
+}

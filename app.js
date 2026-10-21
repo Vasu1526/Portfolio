@@ -104,6 +104,66 @@ async function refreshNav() {
     render();
 }
 
+/* ---------- DAILY TRANSACTION NAV VERIFICATION ---------- */
+
+async function verifyTxNavs() {
+    // Run only once per calendar day
+    if (S.navCheckedAt === today()) return;
+
+    const codes = [...new Set(S.txns.map(t => t.code))];
+    let fixed = 0, mismatched = 0;
+
+    // Initialise the mismatch store
+    S.navMismatch = S.navMismatch || {};
+
+    await Promise.all(codes.map(async code => {
+        try {
+            // history() caches results so this is cheap after refreshNav()
+            const h = await history(code);
+            if (!h.length) return;
+
+            S.txns
+                .filter(t => t.code === code)
+                .forEach(t => {
+                    const entry = h.find(x => x.d <= t.date);
+                    if (!entry) return;
+
+                    const correct = entry.n;
+                    const stored  = t.nav;
+                    // Consider it a mismatch if deviation > 0.01%
+                    const pctDiff = stored ? Math.abs(correct - stored) / stored : 1;
+
+                    if (pctDiff > 0.0001) {
+                        // Record mismatch for UI badge (stored NAV → correct NAV)
+                        S.navMismatch[t.id] = { stored, correct };
+                        mismatched++;
+
+                        // Auto-correct NAV and recalculate units
+                        const out = OUT.includes(t.type);
+                        t.nav   = correct;
+                        t.units = +((Math.abs(t.amount) / correct) * (out ? -1 : 1)).toFixed(4);
+                        fixed++;
+                    } else {
+                        // Previously flagged but now OK — clear badge
+                        delete S.navMismatch[t.id];
+                    }
+                });
+        } catch (err) {
+            console.warn('NAV verify error for', code, err);
+        }
+    }));
+
+    S.navCheckedAt = today();
+    if (fixed) {
+        save();
+        toast(`NAV check: corrected ${fixed} transaction(s) with stale NAV`);
+        render();
+    } else {
+        save();
+        console.info('NAV check: all transaction NAVs are accurate');
+    }
+}
+
 /* ---------- MATHS ---------- */
 
 const pfOf = (fo, c) =>
@@ -295,6 +355,49 @@ function delTx(id) {
     }
 }
 
+let editTxId = null;
+
+function editTx(id) {
+    editTxId = (editTxId === id) ? null : id;
+    render();
+}
+
+async function txDateChanged(id) {
+    const dateEl = document.getElementById('etx_date_' + id);
+    const navEl  = document.getElementById('etx_nav_' + id);
+    if (!dateEl || !navEl) return;
+    const t = S.txns.find(x => x.id === id);
+    if (!t) return;
+    const newDate = dateEl.value;
+    if (!newDate) return;
+    navEl.placeholder = 'Fetching…';
+    try {
+        const fetched = await navOn(t.code, newDate);
+        if (fetched) { navEl.value = fetched; navEl.placeholder = 'NAV'; }
+        else navEl.placeholder = 'Not found';
+    } catch { navEl.placeholder = 'Error'; }
+}
+
+function saveTx(id) {
+    const t = S.txns.find(x => x.id === id);
+    if (!t) return;
+    const date  = document.getElementById('etx_date_' + id).value;
+    const nav   = parseFloat(document.getElementById('etx_nav_' + id).value);
+    const amt   = parseFloat(document.getElementById('etx_amt_' + id).value);
+    const type  = document.getElementById('etx_type_' + id).value;
+    if (!date || !nav || !amt) return toast('Fill date, NAV and amount');
+    const out = OUT.includes(type);
+    t.date   = date;
+    t.type   = type;
+    t.nav    = nav;
+    t.amount = Math.abs(amt) * (out ? -1 : 1);
+    t.units  = +((Math.abs(amt) / nav) * (out ? -1 : 1)).toFixed(4);
+    editTxId = null;
+    save();
+    render();
+    toast('Transaction updated');
+}
+
 /* ---------- SIP / SWP SCHEDULER ---------- */
 
 async function runDue(manual) {
@@ -410,6 +513,35 @@ const delSip = i => {
         render();
     }
 };
+
+let editSipIdx = null;
+
+function editSip(i) {
+    editSipIdx = (editSipIdx === i) ? null : i;
+    render();
+}
+
+function saveSip(i) {
+    const s = S.sips[i];
+    if (!s) return;
+    const fi  = parseInt(document.getElementById('esip_fund_' + i).value, 10);
+    const f   = S.funds[fi];
+    const typ = document.getElementById('esip_type_' + i).value;
+    const day = parseInt(document.getElementById('esip_day_' + i).value, 10);
+    const amt = parseFloat(document.getElementById('esip_amt_' + i).value);
+    if (!f || !typ || !(day >= 1 && day <= 31) || !(amt > 0)) return toast('Fill all fields correctly');
+    s.code   = f.code;
+    s.name   = f.name;
+    s.amc    = f.amc;
+    s.folio  = f.folio;
+    s.type   = typ;
+    s.day    = day;
+    s.amount = amt;
+    editSipIdx = null;
+    save();
+    render();
+    toast('Schedule updated');
+}
 
 
 /* ---------- EXCEL: WORKBOOK LOAD AND IMPORT ---------- */
@@ -912,9 +1044,17 @@ const V = {
             ['id', 'ID', '']
         ];
 
-        const tblTx = `<div class="tw"><table><thead><tr>${m(flds, f => `<th style="cursor:pointer;vertical-align:top" onclick="setSort('${f[0]}')">${f[1]} ${txSort.k === f[0] ? (txSort.d === 1 ? '▲' : '▼') : ''}${f[2] ? '<br>' + f[2] : ''}</th>`)
-            }<th></th></tr></thead><tbody>` +
-            m(pd, t => `<tr><td>${t.date}</td><td>${t.name}</td><td>${t.type}</td><td>${span(t.amount, inr(t.amount))}</td><td>${t.nav}</td><td>${n4(t.units)}</td><td>${t.folio}</td><td>${pfOf(t.folio, t.code)}</td><td>${t.id}</td><td><button onclick="delTx('${t.id}')">✕</button></td></tr>`) +
+        const tblTx = `<div class="tw"><table><thead><tr>${m(flds, f => `<th style="cursor:pointer;vertical-align:top" onclick="setSort('${f[0]}')">${f[1]} ${txSort.k === f[0] ? (txSort.d === 1 ? '▲' : '▼') : ''}${f[2] ? '<br>' + f[2] : ''}</th>`)}<th></th></tr></thead><tbody>` +
+            pd.map(t => {
+                const isEditing = editTxId === t.id;
+                const mm = (S.navMismatch || {})[t.id];
+                const navCell = mm
+                    ? `<span class="nav-ok">${t.nav}</span> <span class="nav-badge" title="Was ${mm.stored.toFixed(4)} → corrected to ${mm.correct.toFixed(4)}">⚠️ fixed</span>`
+                    : String(t.nav);
+                const dataRow = `<tr><td>${t.date}</td><td>${t.name}</td><td>${t.type}</td><td>${span(t.amount, inr(t.amount))}</td><td>${navCell}</td><td>${n4(t.units)}</td><td>${t.folio}</td><td>${pfOf(t.folio, t.code)}</td><td>${t.id}</td><td style="white-space:nowrap"><button onclick="editTx('${t.id}')" title="Edit" style="margin-right:4px">✏️</button><button onclick="delTx('${t.id}')" title="Delete">✕</button></td></tr>`;
+                const editRow = isEditing ? `<tr class="edit-row"><td colspan="10"><div class="edit-inline"><label>Date<input type="date" id="etx_date_${t.id}" value="${t.date}" onchange="txDateChanged('${t.id}')"></label><label>Type<select id="etx_type_${t.id}">${m(TYPES, tp => `<option${tp === t.type ? ' selected' : ''}>${tp}</option>`)}</select></label><label>Amount ₹<input type="number" id="etx_amt_${t.id}" step="0.01" value="${Math.abs(t.amount)}"></label><label>NAV<input type="number" id="etx_nav_${t.id}" step="0.0001" value="${t.nav}" placeholder="NAV"></label><button class="p" onclick="saveTx('${t.id}')">💾 Save</button><button onclick="editTx('${t.id}')">Cancel</button></div></td></tr>` : '';
+                return dataRow + editRow;
+            }).join('') +
             `</tbody></table></div>`;
 
         const pg = pages > 1 ? `<div class="row" style="align-items:center;margin-top:10px">
@@ -930,20 +1070,43 @@ const V = {
     },
 
     sip() {
+        const sipRows = S.sips
+            .map((s, i) => ({ s, i }))
+            .filter(({ s }) => !PF() || pfOf(s.folio, s.code) === PF());
+
+        const sipTableRows = sipRows.map(({ s, i }) => {
+            const isEditing = editSipIdx === i;
+            const dataRow = [
+                `<input type="checkbox" ${s.active ? 'checked' : ''} onchange="togSip(${i})">`,
+                s.name,
+                s.type,
+                s.day,
+                span(s.type === 'SWP' ? -1 : 1, inr(s.amount)),
+                s.folio,
+                pfOf(s.folio, s.code),
+                `<button onclick="editSip(${i})" title="Edit" style="margin-right:4px">✏️</button><button onclick="delSip(${i})" title="Delete">✕</button>`
+            ];
+            const editRow = isEditing ? `<tr class="edit-row"><td colspan="8"><div class="edit-inline">
+  <label>Fund<select id="esip_fund_${i}">${m(S.funds, (f, fi) => `<option value="${fi}"${f.code === s.code && f.folio === s.folio ? ' selected' : ''}>${f.portfolio} · ${f.name} · ${f.folio}</option>`)}</select></label>
+  <label>Type<select id="esip_type_${i}"><option${s.type==='SIP'?' selected':''}>SIP</option><option${s.type==='SWP'?' selected':''}>SWP</option></select></label>
+  <label>Day<input type="number" id="esip_day_${i}" min="1" max="31" value="${s.day}"></label>
+  <label>Amount ₹<input type="number" id="esip_amt_${i}" step="0.01" min="0" value="${s.amount}"></label>
+  <button class="p" onclick="saveSip(${i})">💾 Save</button>
+  <button onclick="editSip(${i})">Cancel</button>
+</div></td></tr>` : '';
+            return { dataRow, editRow };
+        });
+
+        // Build custom table with injected edit rows
+        const headers = ['Active', 'Scheme', 'Type', 'Day', 'Amount', 'Folio', 'Portfolio', ''];
+        const sipTableHtml = `<div class="tw"><table><thead><tr>${m(headers, h => `<th>${h}</th>`)}</tr></thead><tbody>` +
+            sipTableRows.map(({ dataRow, editRow }) =>
+                `<tr>${m(dataRow, c => `<td>${c}</td>`)}</tr>${editRow}`
+            ).join('') +
+            `</tbody></table></div>`;
+
         return `<form class="row" onsubmit="addSip(event)"><select id="sf">${fopts()}</select><select id="st"><option>SIP</option><option>SWP</option></select><input id="sd" type="number" min="1" max="31" placeholder="Day of month" required><input id="sa" type="number" step="0.01" min="0" placeholder="Amount ₹" required><button class="p">Add schedule</button></form>` +
-            tbl(
-                ['Active', 'Scheme', 'Type', 'Day', 'Amount', 'Folio', 'Portfolio', ''],
-                S.sips.map((s, i) => [
-                    `<input type="checkbox" ${s.active ? 'checked' : ''} onchange="togSip(${i})">`,
-                    s.name,
-                    s.type,
-                    s.day,
-                    span(s.type === 'SWP' ? -1 : 1, inr(s.amount)),
-                    s.folio,
-                    pfOf(s.folio, s.code),
-                    `<button onclick="delSip(${i})">✕</button>`
-                ]).filter((_, i) => !PF() || pfOf(S.sips[i].folio, S.sips[i].code) === PF())
-            );
+            sipTableHtml;
     },
 
     nav() {
@@ -1137,6 +1300,17 @@ async function loadRemoteData() {
     render();
 }
 
+// Deduplicate an array of rows by a composite key to prevent
+// "ON CONFLICT DO UPDATE command cannot affect row a second time".
+function dedup(rows, ...keys) {
+    const seen = new Map();
+    for (const row of rows) {
+        const k = keys.map(k => String(row[k] ?? '')).join('|');
+        seen.set(k, row);          // last write wins
+    }
+    return [...seen.values()];
+}
+
 async function syncAllToSupabase(force = false) {
     if (!remoteReady && !force) return;
 
@@ -1149,17 +1323,20 @@ async function syncAllToSupabase(force = false) {
 
     try {
         if (S.funds.length) {
-            const rows = S.funds.map(f => ({
-                distributor: f.distributor || '',
-                folio_no: fs(f.folio),
-                portfolio_id: fs(f.portfolio),
-                scheme_code: +f.code,
-                scheme_name: f.name || '',
-                amc_name: f.amc || '',
-                plan: f.plan || '',
-                option: f.option || '',
-                category: f.category || ''
-            }));
+            const rows = dedup(
+                S.funds.map(f => ({
+                    distributor: f.distributor || '',
+                    folio_no: fs(f.folio),
+                    portfolio_id: fs(f.portfolio),
+                    scheme_code: +f.code,
+                    scheme_name: f.name || '',
+                    amc_name: f.amc || '',
+                    plan: f.plan || '',
+                    option: f.option || '',
+                    category: f.category || ''
+                })),
+                'folio_no', 'scheme_code'
+            );
 
             const { error } = await sb
                 .from('mutual_funds')
@@ -1169,19 +1346,22 @@ async function syncAllToSupabase(force = false) {
         }
 
         if (S.txns.length) {
-            const rows = S.txns.map(t => ({
-                transaction_id: String(t.id),
-                transaction_date: t.date,
-                scheme_code: +t.code,
-                scheme_name: t.name || '',
-                amc: t.amc || '',
-                transaction_type: t.type,
-                amount: Math.abs(asNumber(t.amount)),
-                nav: asNumber(t.nav),
-                units: Math.abs(asNumber(t.units)),
-                folio_no: fs(t.folio),
-                status: t.status || 'Completed'
-            }));
+            const rows = dedup(
+                S.txns.map(t => ({
+                    transaction_id: String(t.id),
+                    transaction_date: t.date,
+                    scheme_code: +t.code,
+                    scheme_name: t.name || '',
+                    amc: t.amc || '',
+                    transaction_type: t.type,
+                    amount: Math.abs(asNumber(t.amount)),
+                    nav: asNumber(t.nav),
+                    units: Math.abs(asNumber(t.units)),
+                    folio_no: fs(t.folio),
+                    status: t.status || 'Completed'
+                })),
+                'transaction_id'
+            );
 
             const { error } = await sb
                 .from('mf_transactions')
@@ -1191,17 +1371,20 @@ async function syncAllToSupabase(force = false) {
         }
 
         if (S.sips.length) {
-            const rows = S.sips.map(x => ({
-                schedule_id: sipId(x),
-                scheme_code: +x.code,
-                scheme_name: x.name || '',
-                amc: x.amc || '',
-                schedule_type: x.type,
-                schedule_day: +x.day,
-                amount: Math.abs(asNumber(x.amount)),
-                folio_no: fs(x.folio),
-                active: !!x.active
-            }));
+            const rows = dedup(
+                S.sips.map(x => ({
+                    schedule_id: sipId(x),
+                    scheme_code: +x.code,
+                    scheme_name: x.name || '',
+                    amc: x.amc || '',
+                    schedule_type: x.type,
+                    schedule_day: +x.day,
+                    amount: Math.abs(asNumber(x.amount)),
+                    folio_no: fs(x.folio),
+                    active: !!x.active
+                })),
+                'schedule_id'
+            );
 
             const { error } = await sb
                 .from('mf_sip_schedules')
@@ -1210,13 +1393,16 @@ async function syncAllToSupabase(force = false) {
             if (error) throw error;
         }
 
-        const navRows = Object.entries(S.navs || {}).map(([code, n]) => ({
-            scheme_code: +code,
-            latest_nav: asNumber(n.latest),
-            previous_nav: asNumber(n.prev),
-            nav_date: n.date || null,
-            updated_at: new Date().toISOString()
-        }));
+        const navRows = dedup(
+            Object.entries(S.navs || {}).map(([code, n]) => ({
+                scheme_code: +code,
+                latest_nav: asNumber(n.latest),
+                previous_nav: asNumber(n.prev),
+                nav_date: n.date || null,
+                updated_at: new Date().toISOString()
+            })),
+            'scheme_code'
+        );
 
         if (navRows.length) {
             const { error } = await sb
@@ -1258,6 +1444,7 @@ async function startApp() {
     if (S.funds.length) {
         if (S.navAt !== today()) await refreshNav();
         await runDue();
+        await verifyTxNavs();   // daily NAV accuracy check for all transactions
     }
 }
 
